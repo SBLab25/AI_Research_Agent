@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Research Agent</title>
+    <meta name="description" content="Autonomous Research Scientist Agent with interactive notebook canvas.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body
+    style="margin:0;padding:0;height:100vh;overflow:hidden;display:flex;flex-direction:column;font-family:'Inter',sans-serif;background:#06090f;color:#f0f4f8;">
+    <!-- ── Header ──────────────────────────────────────────── -->
+    <header id="app-header">
+        <div class="header-left">
+            <div class="logo">
+                <span class="logo-icon">&#x1F9EC;</span>
+                <div>
+                    <h1>AI Research Agent</h1>
+                    <p class="tagline">Multi-Agent Autonomous Research Lab</p>
+                </div>
+            </div>
+        </div>
+        <div class="header-center">
+            <div class="toolbar">
+                <button class="toolbar-btn" id="btn-save" title="Save Progress">
+                    <span>&#x1F4BE;</span> Save
+                </button>
+                <button class="toolbar-btn" id="btn-load" title="Load Progress">
+                    <span>&#x1F4C2;</span> Load
+                </button>
+                <button class="toolbar-btn" id="btn-export-docx" title="Export Report as DOCX">
+                    <span>&#x1F4C4;</span> .docx
+                </button>
+                <button class="toolbar-btn" id="btn-export-ipynb" title="Export Notebook as .ipynb">
+                    <span>&#x1F4D3;</span> .ipynb
+                </button>
+                <button class="toolbar-btn" id="btn-export-md" title="Export Report as Markdown">
+                    <span>&#x1F4DD;</span> .md
+                </button>
+            </div>
+            <input type="file" id="load-file-input" accept=".json" class="hidden">
+        </div>
+        <div class="header-right">
+            <div id="config-status" class="config-badge not-configured">
+                <span class="dot"></span>
+                <span class="label">Not Configured</span>
+            </div>
+            <button id="settings-btn" class="icon-btn" title="Settings">&#x2699;&#xFE0F;</button>
+        </div>
+    </header>
+
+    <!-- ── Main Split Pane ─────────────────────────────────── -->
+    <div id="app-container"
+        style="display:flex !important;flex-direction:row !important;flex:1;overflow:hidden;width:100%;">
+
+        <!-- LEFT PANE -->
+        <div id="left-pane"
+            style="width:380px;min-width:240px;max-width:600px;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;background:#0c1017;border-right:1px solid rgba(255,255,255,0.06);">
+            <!-- Topic Input -->
+            <div class="pane-section" id="input-section">
+                <div class="input-card">
+                    <input type="text" id="topic-input" placeholder="Enter research topic..." autocomplete="off">
+                    <button id="start-btn" class="start-btn">
+                        <span class="btn-text">Start</span> &#x1F680;
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pipeline Stages -->
+            <div class="pane-section" id="pipeline-section">
+                <div class="section-header">
+                    <h3>Pipeline</h3>
+                    <div id="pipeline-timer" class="timer">00:00</div>
+                </div>
+                <div id="pipeline-stages">
+                    <div class="stage-item" data-stage="planner">
+                        <div class="stage-indicator" id="ind-planner"></div>
+                        <div class="stage-label"><span class="stage-emoji">&#x1F9E0;</span><span>Planner</span></div>
+                        <div class="stage-actions"><button class="rerun-btn" data-stage="planner"
+                                title="Re-run">&#x21BB;</button></div>
+                    </div>
+                    <div class="stage-item" data-stage="paper_reader">
+                        <div class="stage-indicator" id="ind-paper_reader"></div>
+                        <div class="stage-label"><span class="stage-emoji">&#x1F4DA;</span><span>Paper Reader</span>
+                        </div>
+                        <div class="stage-actions"><button class="rerun-btn" data-stage="paper_reader"
+                                title="Re-run">&#x21BB;</button></div>
+                    </div>
+                    <div class="stage-item" data-stage="hypothesis_gen">
+                        <div class="stage-indicator" id="ind-hypothesis_gen"></div>
+                        <div class="stage-label"><span class="stage-emoji">&#x1F52C;</span><span>Hypothesis</span></div>
+                        <div class="stage-actions"><button class="rerun-btn" data-stage="hypothesis_gen"
+                                title="Re-run">&#x21BB;</button></div>
+                    </div>
+                    <div class="stage-item" data-stage="experiment">
+                        <div class="stage-indicator" id="ind-experiment"></div>
+                        <div class="stage-label"><span
+                                class="stage-emoji">&#x2697;&#xFE0F;</span><span>Experiment</span></div>
+                        <div class="stage-actions"><button class="rerun-btn" data-stage="experiment"
+                                title="Re-run">&#x21BB;</button></div>
+                    </div>
+                    <div class="stage-item" data-stage="evaluation">
+                        <div class="stage-indicator" id="ind-evaluation"></div>
+                        <div class="stage-label"><span class="stage-emoji">&#x1F4CA;</span><span>Evaluation</span></div>
+                        <div class="stage-actions"><button class="rerun-btn" data-stage="evaluation"
+                                title="Re-run">&#x21BB;</button></div>
+                    </div>
+                    <div class="stage-item" data-stage="writer">
+                        <div class="stage-indicator" id="ind-writer"></div>
+                        <div class="stage-label"><span class="stage-emoji">&#x1F4DD;</span><span>Writer</span></div>
+                        <div class="stage-actions"><button class="rerun-btn" data-stage="writer"
+                                title="Re-run">&#x21BB;</button></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agent Chat (expanded — fills remaining space) -->
+            <div class="pane-section chat-section-expanded" id="chat-section">
+                <div class="section-header">
+                    <h3>Agent Chat</h3>
+                    <span id="chat-agent-label" class="chat-agent-label">Select a stage</span>
+                </div>
+                <div id="chat-messages" class="chat-messages"></div>
+                <!-- Re-run panel (inline in chat area) -->
+                <div id="rerun-panel" class="hidden">
+                    <textarea id="rerun-feedback" placeholder="Provide feedback for this agent..." rows="2"></textarea>
+                    <button id="rerun-submit-btn" class="rerun-submit-btn">Re-run Agent</button>
+                </div>
+                <div class="chat-input-row">
+                    <input type="text" id="chat-input" placeholder="Chat with the selected agent..." autocomplete="off">
+                    <button id="chat-send-btn" class="chat-send-btn">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resizable Divider -->
+        <div id="pane-divider" style="width:5px;flex-shrink:0;cursor:col-resize;background:rgba(255,255,255,0.06);">
+        </div>
+
+        <!-- RIGHT PANE: Dynamic Canvas -->
+        <div id="right-pane"
+            style="flex:1;min-width:300px;display:flex;flex-direction:column;overflow:hidden;background:#06090f;">
+            <div id="canvas-header">
+                <h3 id="canvas-title">&#x1F4D3; Canvas</h3>
+                <div class="canvas-header-actions">
+                    <button class="nb-ctrl-btn" id="btn-save-agent" title="Save this agent's output"
+                        style="display:none;">&#x1F4BE; Save Output</button>
+                    <div class="notebook-controls" id="notebook-controls" style="display:none;">
+                        <button class="nb-ctrl-btn" id="btn-add-cell">+ Add Cell</button>
+                        <button class="nb-ctrl-btn" id="btn-run-all">&#x25B6; Run All</button>
+                        <span id="notebook-status" class="nb-status">Idle</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Agent Detail Canvas (shown when clicking any non-experiment stage) -->
+            <div id="canvas-view" class="canvas-content">
+                <div class="canvas-empty-state">
+                    <p>&#x1F52C; Click a pipeline stage to see its output here.</p>
+                    <p class="nb-empty-sub">Start a research session to begin.</p>
+                </div>
+            </div>
+            <!-- Notebook Canvas (shown only when clicking Experiment stage) -->
+            <div id="notebook-view" class="canvas-content" style="display:none;">
+                <div id="notebook-cells">
+                    <div class="nb-empty-state">
+                        <p>&#x1F52C; Start a research session to see notebook cells here.</p>
+                        <p class="nb-empty-sub">The Experiment Agent will generate executable code cells, or you can add
+                            your own.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Settings Modal ──────────────────────────────────── -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button id="modal-close" class="icon-btn">&#x2715;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>LLM API Key <span class="required">*</span></label>
+                    <p class="form-help">Works with OpenAI, Groq, OpenRouter, or any compatible API.</p>
+                    <input type="password" id="api-key-input" placeholder="sk-... or gsk_...">
+                </div>
+                <div class="form-group">
+                    <label>API Base URL</label>
+                    <input type="text" id="base-url-input" placeholder="https://api.openai.com/v1">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Model</label>
+                        <input type="text" id="model-input" placeholder="gpt-4o-mini">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Papers</label>
+                        <input type="number" id="papers-input" min="3" max="20" value="8">
+                    </div>
+                </div>
+                <div class="preset-buttons">
+                    <span class="form-help">Presets:</span>
+                    <button class="preset-btn" data-url="https://api.openai.com/v1" data-model="gpt-4o-mini">OpenAI
+                        Mini</button>
+                    <button class="preset-btn" data-url="https://api.openai.com/v1" data-model="gpt-4o">OpenAI
+                        4o</button>
+                    <button class="preset-btn" data-url="https://api.groq.com/openai/v1"
+                        data-model="llama-3.3-70b-versatile">Groq Llama</button>
+                    <button class="preset-btn" data-url="https://api.groq.com/openai/v1"
+                        data-model="deepseek-r1-distill-llama-70b">Groq DeepSeek</button>
+                    <button class="preset-btn" data-url="https://openrouter.ai/api/v1"
+                        data-model="google/gemini-2.0-flash-001">OpenRouter</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-config-btn" class="primary-btn">Save Configuration</button>
+                <div id="save-status" class="save-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
