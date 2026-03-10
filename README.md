@@ -14,7 +14,7 @@ An AI-powered multi-agent system that automates the scientific research workflow
 - � **Interactive Agent Chat** — Chat directly with individual agents to refine hypotheses, adjust plans, or modify experimental code during the research process.
 - �📚 **Automatic Literature Retrieval** — Searches arXiv for relevant papers and creates a synthesized knowledge base.
 - 🔬 **Research Gap Analysis** — Autonomously identifies limitations in existing work and proposes novel approaches.
-- ⚗️ **Experiment Code Generation** — Generates and safely executes complete PyTorch experiment code in a sandboxed Jupyter-like environment.
+- ⚗️ **Experiment Code Generation** — Generates complete PyTorch experiment code in a Jupyter-like environment **(Note: Code *Execution* Sandbox is currently a Work In Progress 🚧)**.
 - 📊 **Analytical Evaluation** — Compares execution results against literature benchmarks to assess the validity of the hypothesis.
 - 📝 **Research Report Generation** — Synthesizes all findings into a full academic paper draft (Abstract → Conclusion).
 - 🌐 **Beautiful Dark UI** — Real-time pipeline visualization, interactive canvas, and Server-Sent Events (SSE) streaming.
@@ -109,7 +109,7 @@ The AI Research Agent MVP focuses on a robust, locally runnable web application 
 ### Agent Capabilities
 - **Planner**: Generates multiple research angles; user can select the best one or let the system auto-select.
 - **Paper Reader**: Uses RAG (Retrieval-Augmented Generation) with ChromaDB to chunk and comprehend lengthy arXiv PDFs.
-- **Experimenter**: Features a Jupyter-like canvas UI. It spawns an isolated Python subprocess to execute code and captures `stdout`/`stderr` alongside Base64 encoded Matplotlib figures.
+- **Experimenter**: Features a Jupyter-like canvas UI. It successfully generates experiment code based on the hypothesis. *(🚧 **WIP**: The isolated Python subprocess sandbox for executing code and capturing `stdout`/`stderr`/figures is currently under construction and cannot execute the generated code yet).*
 
 ---
 
