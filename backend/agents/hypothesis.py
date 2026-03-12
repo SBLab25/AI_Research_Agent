@@ -66,16 +66,20 @@ Paper {i}: {s.paper_title}
 - Limitations: {s.limitations[:150]}
 """
 
-    # RAG: Get related insights from vector store (limited)
+    # RAG: Deep Context Pull from Vector Store
+    # Pulling up to 15 chunks (web searches, plans, and paper paragraphs)
     rag_context = ""
     try:
-        rag_results = await vector_store.search(topic, k=5)
+        rag_results = await vector_store.search(topic, k=15)
         if rag_results:
-            rag_context = "\nRetrieved insights:\n"
-            for r in rag_results[:5]:
-                rag_context += f"- {r.get('title', '')[:80]}: {r.get('text', '')[:200]}\n"
-    except Exception:
-        pass
+            rag_context = "\n--- DEEP CONTEXT MEMORY (Web Searches, Plans, and Full Paper Chunks) ---\n"
+            for i, r in enumerate(rag_results, 1):
+                source = r.get("source", "Memory")
+                title = r.get("title", source)
+                rag_context += f"[{i}] {title}: {r.get('text', '')}\n"
+            rag_context += "--------------------------------------------------------------------\n"
+    except Exception as e:
+        print(f"[Hypothesis Agent] Failed to pull from Vector Store: {e}")
 
     # Prior cycle context (limited)
     prior_context = ""
@@ -99,7 +103,7 @@ Paper summaries ({len(truncated_summaries)} of {len(summaries)} papers):
 {synthesis_text}{rag_context}{prior_context}
 
 Generate EXACTLY 5 novel, testable hypotheses based on this evidence.
-Each should be implementable on a standard laptop with sklearn/PyTorch."""
+Each should be implementable on a standard laptop with sklearn/PyTorch. Make heavy use of the "DEEP CONTEXT MEMORY" to ensure novelty and groundedness."""
 
     # Try with JSON mode first, then fallback to raw parsing
     result = None

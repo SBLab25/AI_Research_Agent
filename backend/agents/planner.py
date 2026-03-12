@@ -4,7 +4,7 @@ Asks the user to choose, auto-selects after 300 seconds.
 """
 
 from backend.tools.llm_client import call_llm_json
-from backend.tools import memory_store
+from backend.tools import memory_store, search_client
 
 SYSTEM_PROMPT = """You are an expert Research Planner Agent. Your task is to deeply analyze a research topic
 and generate EXACTLY 5 distinct, high-quality research plans. Each plan should explore a DIFFERENT angle,
@@ -41,7 +41,26 @@ Guidelines:
 
 
 async def run(topic: str, session_id: str = "") -> dict:
-    """Generate 5 detailed research plans for the given topic."""
+    """Generate 5 detailed research plans for the given topic, augmented by live web search."""
+
+    # 1. Fetch real-time context from the internet
+    web_results = await search_client.search_web(f"{topic} state of the art research", max_results=10)
+    web_context = ""
+    if web_results:
+        web_context = "\n\n--- REAL-TIME INTERNET SEARCH RESULTS ---\n"
+        for i, res in enumerate(web_results, 1):
+            web_context += f"Result {i}: {res.get('title')}\nSnippet: {res.get('body')}\n\n"
+        web_context += "-----------------------------------------\n"
+        
+        # Save search results to persistent memory
+        if session_id:
+            try:
+                memory_store.save_memory(session_id, "planner", "web_search", web_context)
+            except Exception:
+                pass
+
+    if progress_callback:
+        await progress_callback(1, 1, "Analyzing landscape and drafting plans...")
 
     # Check for existing context from previous cycles
     prior_context = ""
@@ -54,12 +73,14 @@ async def run(topic: str, session_id: str = "") -> dict:
 
 Topic: {topic}
 {prior_context}
+{web_context}
 
 Think carefully about:
 1. What are the major sub-problems within this topic?
 2. What methodologies have been explored vs what's missing?
 3. What datasets and evaluation benchmarks are relevant?
 4. Where are the biggest opportunities for novel contributions?
+5. Reference the real-time internet search results if applicable to ensure state-of-the-art methodology.
 
 Generate 5 DISTINCT plans that cover different angles, from safe incremental work to ambitious novel approaches."""
 
@@ -70,14 +91,34 @@ Generate 5 DISTINCT plans that cover different angles, from safe incremental wor
         max_tokens=6000,
     )
 
-    plans = result.get("plans", [])
-    topic_analysis = result.get("topic_analysis", "")
+    plans = plan_result.get("plans", [])
+    topic_analysis = plan_result.get("topic_analysis", "")
 
-    # Store in database
+    # Store in database and Vector RAM
     if session_id:
         memory_store.save_plans(session_id, plans)
         memory_store.save_memory(session_id, "planner", "topic_analysis", topic_analysis)
         memory_store.save_context(session_id, "planner_analysis", topic_analysis)
+        
+        # Deep RAG Memory Injection
+        try:
+            from backend.tools import vector_store
+            
+            # Embed web context
+            if web_context:
+                await vector_store.add_documents(
+                    [web_context], 
+                    [{"source": "planner_web_search", "topic": topic}]
+                )
+            # Embed the generated plans
+            for i, p in enumerate(plans):
+                plan_text = f"Plan {i+1}: {p.get('title')}. Objective: {', '.join(p.get('research_objectives', []))}. Method: {p.get('methodology')}"
+                await vector_store.add_documents(
+                    [plan_text], 
+                    [{"source": "planner_generated_plan", "topic": topic, "plan_index": i}]
+                )
+        except Exception as e:
+            print(f"[Planner] Failed to embed to vector store: {e}")
 
     return {
         "topic_analysis": topic_analysis,

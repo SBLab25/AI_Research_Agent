@@ -81,20 +81,44 @@ async def start_research(topic: str):
     )
 
 
-# ── Notebook Execution ────────────────────────────────────────
+# ── Stateful Runtime & Execution ────────────────────────────────
+
+from backend.tools.kernel_manager import jupyter_service
+
+@router.post("/runtime/start")
+async def start_runtime():
+    try:
+        jupyter_service.start_kernel()
+        return {"status": "ok", "message": "Runtime started successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/runtime/stop")
+async def stop_runtime():
+    try:
+        jupyter_service.stop_kernel()
+        return {"status": "ok", "message": "Runtime stopped."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 class ExecuteRequest(BaseModel):
     code: str
-    timeout: int = 300
 
 @router.post("/notebook/execute")
 async def execute_cell(req: ExecuteRequest):
-    result = await execute_code(req.code, timeout=min(req.timeout, 300))
-    return {
-        "success": result.success, "stdout": result.stdout, "stderr": result.stderr,
-        "images": result.images, "error": result.error, "execution_time": result.execution_time,
-    }
-
+    if not jupyter_service.is_running():
+        raise HTTPException(status_code=400, detail="Runtime is not active. Please start the runtime first.")
+    
+    async def event_generator():
+        import json
+        async for evt in jupyter_service.execute_cell(req.code):
+            yield f"data: {json.dumps(evt)}\n\n"
+            
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 # ── Agent Chat ────────────────────────────────────────────────
 

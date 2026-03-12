@@ -52,6 +52,7 @@
                 <span class="dot"></span>
                 <span class="label">Not Configured</span>
             </div>
+            <button id="dashboard-btn" class="icon-btn" title="Research Dashboard">&#x1F441;&#xFE0F;</button>
             <button id="settings-btn" class="icon-btn" title="Settings">&#x2699;&#xFE0F;</button>
         </div>
     </header>
@@ -153,6 +154,9 @@
                     <button class="nb-ctrl-btn" id="btn-save-agent" title="Save this agent's output"
                         style="display:none;">&#x1F4BE; Save Output</button>
                     <div class="notebook-controls" id="notebook-controls" style="display:none;">
+                        <button class="nb-ctrl-btn run-btn" id="btn-start-runtime" title="Start Jupyter Kernel" style="background: rgba(34, 211, 238, 0.2); border: 1px solid var(--cyan);">🟢 Start Runtime</button>
+                        <button class="nb-ctrl-btn stop-btn hidden" id="btn-stop-runtime" title="Stop Jupyter Kernel" style="background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger);">🔴 Stop Runtime</button>
+                        <div class="divider" style="width: 1px; height: 16px; background: var(--border); margin: 0 4px;"></div>
                         <button class="nb-ctrl-btn" id="btn-add-cell">+ Add Cell</button>
                         <button class="nb-ctrl-btn" id="btn-run-all">&#x25B6; Run All</button>
                         <span id="notebook-status" class="nb-status">Idle</span>
@@ -174,6 +178,47 @@
                         <p class="nb-empty-sub">The Experiment Agent will generate executable code cells, or you can add
                             your own.</p>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Dashboard Modal ─────────────────────────────────── -->
+    <div id="dashboard-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content dashboard-content">
+            <div class="modal-header">
+                <h2>&#x1F441;&#xFE0F; AI Research Dashboard</h2>
+                <div style="flex:1;"></div>
+                <div class="runtime-status-badge" id="dash-runtime-status" style="margin-right: 16px; padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); color: var(--danger);">🔴 Runtime Stopped</div>
+                <button id="dash-modal-close" class="icon-btn">&#x2715;</button>
+            </div>
+            <div class="modal-body dashboard-body">
+                <div class="dashboard-tabs">
+                    <button class="dash-tab active" data-target="dash-logs">Activity Logs</button>
+                    <button class="dash-tab" data-target="dash-memory">Research Memory</button>
+                    <button class="dash-tab" data-target="dash-prompts">Agent Prompts</button>
+                </div>
+                
+                <div class="dash-content pane-scroll active" id="dash-logs">
+                    <div class="dash-log-list" id="dash-log-list" style="display:flex; flex-direction:column; gap:8px;">
+                        <p class="form-help">Start a research session to see real-time AI activity logs.</p>
+                    </div>
+                </div>
+
+                <div class="dash-content pane-scroll" id="dash-memory" style="display:none;">
+                    <div id="dash-memory-content" style="white-space: pre-wrap; font-family: var(--mono); font-size: 0.85rem;">
+                        <p class="form-help">The agents' global memory (web discoveries, hypothesis grounding) will appear here after the Planner runs.</p>
+                    </div>
+                    <button class="secondary-btn" id="btn-refresh-memory" style="margin-top:12px;">Refresh Memory View</button>
+                </div>
+
+                <div class="dash-content pane-scroll" id="dash-prompts" style="display:none;">
+                    <p class="form-help" style="margin-bottom: 16px;">Modify the system instructions for the autonomous agents. These take effect on the next execution.</p>
+                    <div id="dash-prompts-list" style="display:flex; flex-direction:column; gap:12px;">
+                        <!-- Textareas injected via JS -->
+                    </div>
+                    <button id="save-prompts-btn" class="primary-btn mt-2">Save Custom Prompts</button>
                 </div>
             </div>
         </div>

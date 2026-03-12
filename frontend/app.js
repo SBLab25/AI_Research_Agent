@@ -81,6 +81,8 @@ function bindEvents() {
     $("#chat-input").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
     // Notebook controls
+    $("#btn-start-runtime").addEventListener("click", startRuntime);
+    $("#btn-stop-runtime").addEventListener("click", stopRuntime);
     $("#btn-add-cell").addEventListener("click", () => addEmptyCell());
     $("#btn-run-all").addEventListener("click", runAllCells);
 
@@ -94,6 +96,45 @@ function bindEvents() {
     $("#btn-export-docx").addEventListener("click", exportDocx);
     $("#btn-export-ipynb").addEventListener("click", exportIpynb);
     $("#btn-export-md").addEventListener("click", exportMarkdown);
+    // Dashboard Modal
+    $("#dashboard-btn").addEventListener("click", () => $("#dashboard-modal").classList.remove("hidden"));
+    $("#dash-modal-close").addEventListener("click", () => $("#dashboard-modal").classList.add("hidden"));
+    $$(".dash-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            $$(".dash-tab").forEach(t => t.classList.remove("active"));
+            $$(".dash-content").forEach(c => c.classList.remove("active"));
+            tab.classList.add("active");
+            $(`#${tab.dataset.target}`).classList.add("active");
+        });
+    });
+}
+
+// ── Dashboard Handlers ───────────────────────────────────────
+function addDashboardLog(stage, status, message) {
+    const list = $("#dash-log-list");
+    if (!list) return;
+    
+    // Remove empty state if present
+    if (list.querySelector(".form-help")) list.innerHTML = "";
+    
+    const entry = document.createElement("div");
+    entry.className = `log-entry ${status}`;
+    
+    const time = new Date().toLocaleTimeString([], { hour12: false });
+    
+    let icon = "⚙️";
+    if (status.includes("error")) icon = "❌";
+    else if (status.includes("success") || status.includes("completed")) icon = "✅";
+    else if (stage === "planner") icon = "🧠";
+    else if (stage === "paper_reader") icon = "📚";
+    else if (stage === "hypothesis_gen") icon = "🔬";
+    
+    entry.innerHTML = `<span class="log-time">[${time}]</span> <strong>${icon} ${stage.toUpperCase()}:</strong> ${message}`;
+    list.appendChild(entry);
+    
+    // Auto-scroll to bottom
+    const container = $("#dash-logs");
+    container.scrollTop = container.scrollHeight;
 }
 
 // ── Config ───────────────────────────────────────────────────
@@ -178,6 +219,10 @@ function startResearch() {
     $("#topic-input").disabled = true;
     startTimer();
 
+    // Clear previous dashboard logs
+    const logList = $("#dash-log-list");
+    if (logList) logList.innerHTML = `<p class="form-help">Research started for: "${topic}"...</p>`;
+
     eventSource = new EventSource(`/api/research/start?topic=${encodeURIComponent(topic)}`);
     eventSource.onmessage = ev => {
         try { handleEvent(JSON.parse(ev.data)); } catch (e) { console.error(e); }
@@ -209,6 +254,9 @@ function resetAll() {
 
 function handleEvent(ev) {
     const { stage, status, message, data } = ev;
+
+    // Log to dashboard
+    if (message) addDashboardLog(stage, status, message);
 
     if (stage === "done") { finish(status === "error"); return; }
 
@@ -491,6 +539,48 @@ function deleteCell(cellId) {
     renderNotebook();
 }
 
+async function startRuntime() {
+    $("#btn-start-runtime").disabled = true;
+    $("#btn-start-runtime").textContent = "Starting...";
+    try {
+        const r = await fetch("/api/runtime/start", { method: "POST" });
+        if (r.ok) {
+            $("#btn-start-runtime").classList.add("hidden");
+            $("#btn-stop-runtime").classList.remove("hidden");
+            $("#notebook-status").textContent = "Runtime Active";
+            const dashRt = $("#dash-runtime-status");
+            if(dashRt) {
+                dashRt.innerHTML = "🟢 Runtime Active";
+                dashRt.style.color = "var(--emerald)";
+                dashRt.style.background = "rgba(16, 185, 129, 0.1)";
+                dashRt.style.borderColor = "var(--emerald)";
+            }
+        }
+    } catch(e) { console.error(e); }
+    $("#btn-start-runtime").disabled = false;
+    $("#btn-start-runtime").innerHTML = "🟢 Start Runtime";
+}
+
+async function stopRuntime() {
+    $("#btn-stop-runtime").disabled = true;
+    try {
+        const r = await fetch("/api/runtime/stop", { method: "POST" });
+        if (r.ok) {
+            $("#btn-stop-runtime").classList.add("hidden");
+            $("#btn-start-runtime").classList.remove("hidden");
+            $("#notebook-status").textContent = "Idle";
+            const dashRt = $("#dash-runtime-status");
+            if(dashRt) {
+                dashRt.innerHTML = "🔴 Runtime Stopped";
+                dashRt.style.color = "var(--danger)";
+                dashRt.style.background = "rgba(239, 68, 68, 0.1)";
+                dashRt.style.borderColor = "var(--danger)";
+            }
+        }
+    } catch(e) { console.error(e); }
+    $("#btn-stop-runtime").disabled = false;
+}
+
 async function runCell(cellId) {
     const cell = nbCells.find(c => c.id === cellId);
     if (!cell) return;
@@ -501,23 +591,56 @@ async function runCell(cellId) {
 
     cell.status = "running";
     cell.output = ""; cell.error = ""; cell.images = [];
+    const startTime = Date.now();
     updateCellUI(cellId);
 
     try {
-        const r = await fetch("/api/notebook/execute", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: cell.code, timeout: 300 }),
+        const response = await fetch("/api/notebook/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: cell.code }),
         });
-        const d = await r.json();
-        cell.output = d.stdout || "";
-        cell.error = d.error || d.stderr || "";
-        cell.images = d.images || [];
-        cell.time = d.execution_time || 0;
-        cell.status = d.success ? "success" : "error";
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Request failed");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop(); // Keep incomplete chunk
+
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    const evt = JSON.parse(line.substring(6));
+                    if (evt.type === "stdout" || evt.type === "result") {
+                        cell.output += evt.data;
+                    } else if (evt.type === "stderr") {
+                        cell.error += evt.data;
+                    } else if (evt.type === "error") {
+                        cell.error += evt.data + "\n";
+                    } else if (evt.type === "image") {
+                        cell.images.push(evt.data); // Base64 png chunk
+                    }
+                    updateCellUI(cellId); // Update actively via stream
+                }
+            }
+        }
+        cell.status = cell.error ? "error" : "success";
     } catch (e) {
-        cell.error = "Request failed: " + e.message;
+        cell.error = "Execution failed: " + e.message;
         cell.status = "error";
     }
+    
+    cell.time = (Date.now() - startTime) / 1000.0;
     updateCellUI(cellId);
 }
 

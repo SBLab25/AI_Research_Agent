@@ -1320,3 +1320,94 @@ body {
         cursor: row-resize;
     }
 }
+
+/* ── Dashboard Modal ───────────────────────────────────────── */
+.dashboard-content {
+    width: 70vw;
+    max-width: 1000px;
+    height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-body {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.dashboard-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: #0d1117;
+}
+
+.dash-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 12px;
+    color: var(--text-2);
+    font-weight: 500;
+    font-family: var(--font);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: 0.2s;
+}
+
+.dash-tab:hover {
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.dash-tab.active {
+    color: var(--cyan);
+    border-bottom-color: var(--cyan);
+}
+
+.dash-content {
+    display: none;
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.dash-content.active {
+    display: block;
+}
+
+.pane-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-dim) transparent;
+}
+
+.pane-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.pane-scroll::-webkit-scrollbar-thumb {
+    background: var(--border-dim);
+    border-radius: 3px;
+}
+
+.log-entry {
+    background: #0d1117;
+    border: 1px solid var(--border-dim);
+    border-left: 3px solid var(--border);
+    padding: 10px 14px;
+    border-radius: var(--r-md);
+    font-size: 0.85rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.log-entry.error { border-left-color: var(--danger); background: rgba(239, 68, 68, 0.05); }
+.log-entry.success { border-left-color: var(--emerald); background: rgba(16, 185, 129, 0.05); }
+.log-entry.running { border-left-color: var(--cyan); }
+
+.log-time {
+    font-family: var(--mono);
+    color: var(--text-2);
+    font-size: 0.75rem;
+    margin-right: 8px;
+}

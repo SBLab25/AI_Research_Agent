@@ -5,11 +5,13 @@ stores everything in SQLite, and builds progressive cumulative insights.
 
 import json
 import re
-from backend.tools.arxiv_client import search_papers
+from backend.tools.arxiv_client import search_papers as arxiv_search
+from backend.tools.semantic_scholar import search_papers as scholar_search
 from backend.tools.llm_client import call_llm_json, call_llm
 from backend.tools import vector_store, memory_store
 from backend.models import Paper, PaperSummary
 
+# [prompts remain unchanged]
 SUMMARY_PROMPT = """You are a Research Paper Analyst Agent with a running memory of papers you've already read.
 Your job is to deeply analyze ONE paper at a time, connecting it to your accumulated knowledge.
 
@@ -44,21 +46,35 @@ Respond with valid JSON:
 
 
 async def retrieve_papers(queries: list[str], max_papers: int = 15) -> list[Paper]:
-    """Retrieve papers from arXiv using multiple search queries."""
+    """Retrieve papers by fusing arXiv (preprints) & Semantic Scholar (Peer-Reviewed)."""
     all_papers: list[Paper] = []
-    seen_ids = set()
+    seen_titles = set()
 
     per_query = max(3, max_papers // len(queries))
+    half_query = max(1, per_query // 2)
 
     for query in queries:
+        # Fetch from ArXiv
         try:
-            papers = await search_papers(query, max_results=per_query)
-            for paper in papers:
-                if paper.arxiv_id not in seen_ids:
-                    seen_ids.add(paper.arxiv_id)
+            arxiv_results = await arxiv_search(query, max_results=half_query)
+            for paper in arxiv_results:
+                title_lower = paper.title.lower()
+                if title_lower not in seen_titles:
+                    seen_titles.add(title_lower)
                     all_papers.append(paper)
-        except Exception:
-            continue
+        except Exception as e:
+            print(f"ArXiv search failed for '{query}': {e}")
+            
+        # Fetch from Semantic Scholar
+        try:
+            scholar_results = await scholar_search(query, max_results=half_query)
+            for paper in scholar_results:
+                title_lower = paper.title.lower()
+                if title_lower not in seen_titles:
+                    seen_titles.add(title_lower)
+                    all_papers.append(paper)
+        except Exception as e:
+            print(f"Scholar search failed for '{query}': {e}")
 
     return all_papers[:max_papers]
 
@@ -246,17 +262,22 @@ async def run(queries: list[str], max_papers: int = 15,
             )
             summaries.append(summary)
 
-            # Add to vector store for RAG
-            text = (f"{paper.title}. {summary.problem_statement} "
-                    f"{summary.proposed_method} {summary.limitations}")
-            texts_for_vs.append(text)
-            metadata_for_vs.append({"title": paper.title, "arxiv_id": paper.arxiv_id})
+            # Add to vector store for deep RAG (chunking abstract + summary)
+            detailed_text = (f"Paper: {paper.title}. Authors: {', '.join(paper.authors)}.\n"
+                             f"Abstract: {paper.abstract}\n"
+                             f"Problem: {summary.problem_statement}\n"
+                             f"Method: {summary.proposed_method}\n"
+                             f"Results: {summary.evaluation_results}\n"
+                             f"Limitations: {summary.limitations}")
+            
+            texts_for_vs.append(detailed_text)
+            metadata_for_vs.append({"source": "omni_reader_paper", "title": paper.title, "arxiv_id": paper.arxiv_id})
 
-            # Update vector store after each paper for progressive RAG
+            # Update vector store after each paper for progressive RAG, using smaller chunks
             try:
-                await vector_store.add_documents([text], [metadata_for_vs[-1]])
-            except Exception:
-                pass
+                await vector_store.add_documents([detailed_text], [metadata_for_vs[-1]], chunk_size=200)
+            except Exception as e:
+                print(f"[Paper Reader] Failed adding to vector store: {e}")
 
         except Exception as e:
             summaries.append(PaperSummary(

@@ -55,9 +55,45 @@ async def _run_pipeline_impl(topic: str) -> AsyncGenerator[str, None]:
         "Planner Agent activated. Performing deep analysis of: \"{}\"...".format(topic))
 
     try:
-        plan_result = await planner.run(topic, session_id=session_id)
-        plans = plan_result.get("plans", [])
-        analysis = plan_result.get("topic_analysis", "")
+        from backend.agents import critic
+        
+        # Loop for Planner <-> Critic debate
+        max_attempts = 3
+        plans = []
+        analysis = ""
+        critic_feedback = ""
+        
+        for attempt in range(1, max_attempts + 1):
+            yield _event("planner", "running", f"Planner Generation (Attempt {attempt}/{max_attempts})...")
+            
+            # Planner generates plans (potentially with critic feedback)
+            # We temporarily store the feedback in session memory so the Planner sees it
+            if critic_feedback and session_id:
+                memory_store.save_memory(session_id, "planner", "feedback_context", 
+                    f"CRITIC FEEDBACK on previous attempt: {critic_feedback}\nYOU MUST FIX THESE ISSUES.")
+            
+            plan_result = await planner.run(topic, session_id=session_id)
+            plans = plan_result.get("plans", [])
+            analysis = plan_result.get("topic_analysis", "")
+            
+            if not plans:
+                break
+                
+            yield _event("planner", "running", f"Critic reviewing {len(plans)} plans for novelty and feasibility...")
+            
+            # Critic reviews the plans
+            review = await critic.review_plans(topic, plan_result, attempt)
+            
+            if review.passed:
+                yield _event("planner", "running", f"Critic APPROVED plans (Score: {review.score}/10).")
+                break
+            else:
+                yield _event("planner", "running", f"Critic REJECTED plans (Score: {review.score}/10). Demanding rewrite.\nFeedback: {review.feedback[:100]}...")
+                critic_feedback = review.feedback
+                
+                # If we hit max attempts, we just break and use what we have
+                if attempt == max_attempts:
+                    yield _event("planner", "running", "Max attempts reached. Proceeding with current plans despite Critic reservations.")
 
         if not plans:
             yield _event("planner", "error", "Planner failed to generate plans.")
@@ -166,10 +202,43 @@ async def _run_pipeline_impl(topic: str) -> AsyncGenerator[str, None]:
 
     try:
         import traceback as tb
-        gaps, hypotheses, hypotheses_raw = await hypothesis.run(
-            refined_topic, summaries,
-            session_id=session_id, synthesis=synthesis
-        )
+        from backend.agents import critic
+        
+        # Loop for Hypothesis <-> Critic debate
+        max_attempts = 3
+        gaps, hypotheses, hypotheses_raw = [], [], []
+        critic_feedback = ""
+        
+        for attempt in range(1, max_attempts + 1):
+            yield _event("hypothesis_gen", "running", f"Hypothesis Generation (Attempt {attempt}/{max_attempts})...")
+            
+            # Show Critic feedback to the Hypothesis agent if available
+            if critic_feedback and session_id:
+                memory_store.save_memory(session_id, "hypothesis", "feedback_context", 
+                    f"CRITIC FEEDBACK on previous attempt: {critic_feedback}\nYOU MUST FIX THESE ISSUES.")
+                    
+            gaps, hypotheses, hypotheses_raw = await hypothesis.run(
+                refined_topic, summaries,
+                session_id=session_id, synthesis=synthesis
+            )
+            
+            if not hypotheses:
+                break
+                
+            yield _event("hypothesis_gen", "running", f"Critic reviewing {len(hypotheses)} hypotheses for testability...")
+            
+            # Critic reviews hypotheses
+            review = await critic.review_hypotheses(refined_topic, [g.model_dump() for g in gaps], hypotheses_raw, attempt)
+            
+            if review.passed:
+                yield _event("hypothesis_gen", "running", f"Critic APPROVED hypotheses (Score: {review.score}/10).")
+                break
+            else:
+                yield _event("hypothesis_gen", "running", f"Critic REJECTED hypotheses (Score: {review.score}/10). Demanding rewrite.\nFeedback: {review.feedback[:100]}...")
+                critic_feedback = review.feedback
+                
+                if attempt == max_attempts:
+                    yield _event("hypothesis_gen", "running", "Max attempts reached. Proceeding with current hypotheses.")
 
         gaps_data = [g.model_dump() for g in gaps]
         hypotheses_data = [h.model_dump() for h in hypotheses]
@@ -240,7 +309,7 @@ async def _run_pipeline_impl(topic: str) -> AsyncGenerator[str, None]:
     memory_store.save_memory(session_id, "planner", "feedback_context",
         f"Selected hypothesis: {selected_hypothesis.title}. "
         f"Approach: {selected_hypothesis.proposed_approach}. "
-        f"This informs the research direction.")
+            f"This informs the research direction.")
     memory_store.save_memory(session_id, "hypothesis", "feedback_context",
         f"Selected plan: {selected_plan.get('title', '')}. "
         f"Literature synthesis available from {len(summaries)} papers.")
@@ -260,7 +329,7 @@ async def _run_pipeline_impl(topic: str) -> AsyncGenerator[str, None]:
 
         cells_data = [c.model_dump() for c in exp_code.cells]
         yield _event("experiment", "notebook_ready",
-            "Experiment notebook with {} cells. Starting execution...".format(len(exp_code.cells)),
+            "Experiment notebook with {} cells generated. Awaiting manual execution...".format(len(exp_code.cells)),
             data={
                 "cells": cells_data,
                 "explanation": exp_code.explanation,
@@ -268,47 +337,8 @@ async def _run_pipeline_impl(topic: str) -> AsyncGenerator[str, None]:
             }
         )
 
-        # Execute each cell
-        all_outputs = []
-        for i, cell in enumerate(exp_code.cells):
-            yield _event("experiment", "cell_running",
-                "Executing cell {}/{}: {}...".format(i + 1, len(exp_code.cells), cell.title),
-                data={"cell_id": cell.cell_id, "cell_index": i}
-            )
-
-            result = await execute_code(cell.code, timeout=300)
-
-            cell_result = {
-                "cell_id": cell.cell_id,
-                "cell_index": i,
-                "success": result.success,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "images": result.images,
-                "error": result.error,
-                "execution_time": result.execution_time,
-            }
-
-            status = "cell_completed" if result.success else "cell_error"
-            msg = "Cell {}/{} completed ({:.1f}s)".format(
-                i + 1, len(exp_code.cells), result.execution_time)
-            if not result.success:
-                msg = "Cell {}/{} error: {}".format(
-                    i + 1, len(exp_code.cells), result.error[:200])
-
-            yield _event("experiment", status, msg, data=cell_result)
-
-            if result.stdout:
-                all_outputs.append("--- Cell: {} ---\n{}".format(cell.title, result.stdout))
-            if result.error:
-                all_outputs.append("--- Cell {} Error ---\n{}".format(cell.title, result.error))
-
-        execution_outputs = "\n".join(all_outputs)
-
-        yield _event("experiment", "completed",
-            "All {} experiment cells executed.".format(len(exp_code.cells)),
-            data={"execution_summary": execution_outputs[:5000]}
-        )
+        yield _event("done", "success", "Research pipeline completed successfully. Awaiting manual execution.",
+            data={"target_phase": "experiment"})
 
     except Exception as e:
         yield _event("experiment", "error", "Experiment Agent failed: {}".format(str(e)))

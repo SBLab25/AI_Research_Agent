@@ -31,22 +31,40 @@ def _get_or_create_index(dimension: int = 384):
     return _index
 
 
-async def add_documents(texts: list[str], metadata: list[dict]) -> int:
-    """Embed and store documents in the vector store."""
+async def add_documents(texts: list[str], metadata: list[dict], chunk_size: int = 500) -> int:
+    """Embed and store documents, chunking large texts for better granularity."""
 
     def _add():
         model = _get_model()
-        embeddings = model.encode(texts, normalize_embeddings=True)
+        final_texts = []
+        final_metadata = []
+
+        # Simple text chunker for better RAG granularity
+        for text, meta in zip(texts, metadata):
+            words = text.split()
+            for i in range(0, len(words), chunk_size):
+                chunk = " ".join(words[i:i + chunk_size])
+                # Ensure context context is preserved
+                chunk_meta = meta.copy()
+                chunk_meta["is_chunk"] = len(words) > chunk_size
+                
+                final_texts.append(chunk)
+                final_metadata.append(chunk_meta)
+
+        if not final_texts:
+            return 0
+
+        embeddings = model.encode(final_texts, normalize_embeddings=True)
         embeddings = np.array(embeddings, dtype=np.float32)
 
         index = _get_or_create_index(embeddings.shape[1])
         start_id = len(_documents)
         index.add(embeddings)
 
-        for i, meta in enumerate(metadata):
-            _documents.append({**meta, "text": texts[i], "id": start_id + i})
+        for i, meta in enumerate(final_metadata):
+            _documents.append({**meta, "text": final_texts[i], "id": start_id + i})
 
-        return len(texts)
+        return len(final_texts)
 
     return await asyncio.to_thread(_add)
 
