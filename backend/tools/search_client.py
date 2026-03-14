@@ -14,9 +14,10 @@ async def search_web(query: str, max_results: int = 5) -> list[dict]:
         results = []
         try:
             with DDGS() as ddgs:
-                # text() yields dictionaries
-                for r in ddgs.text(query, max_results=max_results):
-                    results.append(r)
+                # Force the generator to consume entirely into a list here
+                # so we don't return a live generator to the async loop
+                res_gen = ddgs.text(query, max_results=max_results)
+                results = list(res_gen)
         except Exception as e:
             print(f"[Search Client] Error searching '{query}': {e}")
         return results
@@ -33,8 +34,8 @@ async def search_news(query: str, max_results: int = 5) -> list[dict]:
         results = []
         try:
             with DDGS() as ddgs:
-                for r in ddgs.news(query, max_results=max_results):
-                    results.append(r)
+                res_gen = ddgs.news(query, max_results=max_results)
+                results = list(res_gen)
         except Exception as e:
             print(f"[Search Client] Error searching news '{query}': {e}")
         return results

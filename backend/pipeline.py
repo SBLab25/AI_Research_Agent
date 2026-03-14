@@ -67,7 +67,6 @@ async def _run_pipeline_impl(topic: str) -> AsyncGenerator[str, None]:
             yield _event("planner", "running", f"Planner Generation (Attempt {attempt}/{max_attempts})...")
             
             # Planner generates plans (potentially with critic feedback)
-            # We temporarily store the feedback in session memory so the Planner sees it
             if critic_feedback and session_id:
                 memory_store.save_memory(session_id, "planner", "feedback_context", 
                     f"CRITIC FEEDBACK on previous attempt: {critic_feedback}\nYOU MUST FIX THESE ISSUES.")
@@ -148,6 +147,10 @@ async def _run_pipeline_impl(topic: str) -> AsyncGenerator[str, None]:
             }
         )
     except Exception as e:
+        import traceback
+        with open("planner_error.log", "w") as f:
+            f.write(f"PLANNER EXCEPTION: {type(e).__name__}: {e}\n\n")
+            traceback.print_exc(file=f)
         yield _event("planner", "error", "Planner Agent failed: {}".format(str(e)))
         yield _event("done", "error", str(e))
         return

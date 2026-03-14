@@ -59,9 +59,6 @@ async def run(topic: str, session_id: str = "") -> dict:
             except Exception:
                 pass
 
-    if progress_callback:
-        await progress_callback(1, 1, "Analyzing landscape and drafting plans...")
-
     # Check for existing context from previous cycles
     prior_context = ""
     if session_id:
@@ -91,8 +88,8 @@ Generate 5 DISTINCT plans that cover different angles, from safe incremental wor
         max_tokens=6000,
     )
 
-    plans = plan_result.get("plans", [])
-    topic_analysis = plan_result.get("topic_analysis", "")
+    plans = result.get("plans", [])
+    topic_analysis = result.get("topic_analysis", "")
 
     # Store in database and Vector RAM
     if session_id:
